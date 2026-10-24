@@ -1,10 +1,11 @@
-import {udeState, useEffect} from "react";
-import {udenavigate} from " react-router-dom";
-import {Edit3, Shield, Sparkles, UserCheck, Calendar} from "lucide-react";
-import {getPosts, updatePost, deltePost} from ". ./services/api";
-import {GossipCard} from ". ./ components/GossipCard";
-import {HatButtom} from ". ./components/ HatButton";
-import {ConfirmModal} from ". ./components/ConfirmModal";
+
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { Edit3, Shield, Sparkles, UserCheck, Calendar } from "lucide-react";
+import { getPosts, updatePost, deletePost } from "../services/api";
+import { GossipCard } from "../components/GossipCard";
+import { HatButton } from "../components/HatButton";
+import { ConfirmModal } from "../components/ConfirmModal";
 
 const AVATARES_PRONTOS =[
   "https://api.dicebear.com/9.x/bottts-neutral/svg?seed=ShadowHat&backgroundColor=7e22ce",
