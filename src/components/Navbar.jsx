@@ -41,16 +41,6 @@ export function Navbar() {
           </NavLink>
         </nav>
       </div>
-
-      <div className="hidden md:block mt-8 p-4 border border-white/30 rounded-xl bg-zinc-950">
-        <div className="flex items-center gap-2 text-purple-400 font-bold text-sm mb-1">
-          <Sparkles size={16} aria-hidden="true" />
-          <span>Dica Rápida</span>
-        </div>
-        <p className="text-xs text-zinc-300 leading-relaxed">
-          Na caixa de postagem, clique no seu nome embaixo do texto para colocar o <strong className="text-purple-400">🎩 Chapéu Anônimo</strong>!
-        </p>
-      </div>
     </header>
   );
 }
