@@ -2,7 +2,7 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Navbar } from "./components/Navbar";
 import { Feed } from "./pages/Feed";
-import { NewGossip } from "./pages/NewGossip";
+import { SearchPage } from "./pages/SearchPage";
 import { GossipDetail } from "./pages/GossipDetail";
 import { Profile } from "./pages/Profile";
 
@@ -15,7 +15,7 @@ export default function App() {
         <main className="flex-1 min-h-screen bg-black">
           <Routes>
             <Route path="/" element={<Feed />} />
-            <Route path="/novo" element={<NewGossip />} />
+            <Route path="/buscar" element={<SearchPage />} />
             <Route path="/fofoca/:id" element={<GossipDetail />} />
             <Route path="/perfil" element={<Profile />} />
           </Routes>

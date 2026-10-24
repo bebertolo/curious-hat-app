@@ -1,0 +1,175 @@
+// src/pages/SearchPage.jsx
+import { useState, useEffect } from "react";
+import { Search as SearchIcon } from "lucide-react";
+import { getPosts, updatePost, deletePost } from "../services/api";
+import { GossipCard } from "../components/GossipCard";
+import { ConfirmModal } from "../components/ConfirmModal";
+
+export function SearchPage() {
+  const [posts, setPosts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  // Estados da Busca e Filtros
+  const [busca, setBusca] = useState("");
+  const [filtroTipo, setFiltroTipo] = useState("Todos");
+  const [ordenacao, setOrdenacao] = useState("recentes");
+
+  const [postParaDeletar, setPostParaDeletar] = useState(null);
+
+  useEffect(() => {
+    async function carregar() {
+      try {
+        setLoading(true);
+        const dados = await getPosts();
+        setPosts(dados);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+    carregar();
+  }, []);
+
+  async function handleDarFogo(post) {
+    try {
+      const atualizado = await updatePost(post.id, {
+        ...post,
+        likes: (Number(post.likes) || 0) + 1,
+      });
+      setPosts((atuais) => atuais.map((p) => (p.id === post.id ? atualizado : p)));
+    } catch {
+      setError("Erro ao dar fogo.");
+    }
+  }
+
+  async function confirmarExclusao() {
+    if (!postParaDeletar) return;
+    try {
+      await deletePost(postParaDeletar.id);
+      setPosts((atuais) => atuais.filter((p) => p.id !== postParaDeletar.id));
+      setPostParaDeletar(null);
+    } catch {
+      setError("Erro ao excluir publicação.");
+    }
+  }
+
+  const cemAnosMs = 50 * 365 * 24 * 60 * 60 * 1000;
+
+  const postsFiltrados = posts
+    .filter((post) => {
+      const termo = busca.toLowerCase();
+      const bateTexto =
+        post.content?.toLowerCase().includes(termo) ||
+        post.codename?.toLowerCase().includes(termo) ||
+        post.title?.toLowerCase().includes(termo);
+
+      const ehFixo = Number(post.expiresAt) - Date.now() > cemAnosMs;
+      const bateTipo =
+        filtroTipo === "Todos" ||
+        (filtroTipo === "Temporarios" && !ehFixo) ||
+        (filtroTipo === "Fixos" && ehFixo);
+
+      return bateTexto && bateTipo;
+    })
+    .sort((a, b) => {
+      if (ordenacao === "fogos") return (Number(b.likes) || 0) - (Number(a.likes) || 0);
+      if (ordenacao === "expirando") return Number(a.expiresAt) - Number(b.expiresAt);
+      return Number(b.createdAt) - Number(a.createdAt);
+    });
+
+  return (
+    <div>
+      <div className="border-b border-white p-4 bg-black">
+        <h1 className="text-xl font-extrabold text-white">Explorar & Buscar Fofocas 🔍</h1>
+      </div>
+
+      {/* Controles de Busca e Filtros */}
+      <div className="p-4 border-b border-white/60 bg-zinc-950 space-y-3">
+        <div className="relative">
+          <label htmlFor="input-pesquisa" className="sr-only">
+            Pesquisar fofocas ou usuários
+          </label>
+          <SearchIcon
+            size={18}
+            className="absolute left-3.5 top-3 text-purple-400"
+            aria-hidden="true"
+          />
+          <input
+            id="input-pesquisa"
+            type="search"
+            placeholder="Pesquisar por palavra-chave, fofoca ou @autor..."
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            className="w-full bg-black border border-white text-white pl-10 pr-4 py-2.5 rounded-full text-sm"
+          />
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label htmlFor="select-tipo" className="block text-xs text-zinc-300 mb-1 font-semibold">
+              Filtrar por Duração:
+            </label>
+            <select
+              id="select-tipo"
+              value={filtroTipo}
+              onChange={(e) => setFiltroTipo(e.target.value)}
+              className="w-full bg-black border border-purple-400 text-white px-3 py-2 rounded-lg text-sm"
+            >
+              <option value="Todos">Todas as Publicações</option>
+              <option value="Temporarios">⏳ Apenas Fofocas Temporárias</option>
+              <option value="Fixos">💬 Apenas Comentários Fixos</option>
+            </select>
+          </div>
+
+          <div>
+            <label htmlFor="select-ordem" className="block text-xs text-zinc-300 mb-1 font-semibold">
+              Ordenar Resultados:
+            </label>
+            <select
+              id="select-ordem"
+              value={ordenacao}
+              onChange={(e) => setOrdenacao(e.target.value)}
+              className="w-full bg-black border border-white text-white px-3 py-2 rounded-lg text-sm"
+            >
+              <option value="recentes">Mais Recentes</option>
+              <option value="fogos">🔥 Mais Bombadas (Fogos)</option>
+              <option value="expirando">⏳ Prestes a Sumir</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {error && (
+        <div role="alert" className="m-4 p-4 border border-red-400 bg-red-950 text-white rounded-xl">
+          {error}
+        </div>
+      )}
+
+      {loading ? (
+        <p className="p-10 text-center text-zinc-300">Buscando publicações...</p>
+      ) : postsFiltrados.length === 0 ? (
+        <p className="p-10 text-center text-zinc-300">
+          Nenhum resultado encontrado para sua busca.
+        </p>
+      ) : (
+        postsFiltrados.map((post) => (
+          <GossipCard
+            key={post.id}
+            post={post}
+            onLike={handleDarFogo}
+            onDeleteRequest={setPostParaDeletar}
+            onExpire={(id) => setPosts((atuais) => atuais.filter((p) => p.id !== id))}
+          />
+        ))
+      )}
+
+      <ConfirmModal
+        post={postParaDeletar}
+        onCancel={() => setPostParaDeletar(null)}
+        onConfirm={confirmarExclusao}
+      />
+    </div>
+  );
+}

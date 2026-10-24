@@ -1,6 +1,6 @@
 // src/components/Navbar.jsx
 import { NavLink } from "react-router-dom";
-import { Home, PlusCircle, User, Sparkles } from "lucide-react";
+import { Home, Search, User, Sparkles } from "lucide-react";
 
 export function Navbar() {
   const linkClass = ({ isActive }) =>
@@ -27,12 +27,12 @@ export function Navbar() {
         <nav aria-label="Menu principal" className="flex flex-wrap md:flex-col gap-2.5">
           <NavLink to="/" className={linkClass}>
             <Home size={20} aria-hidden="true" />
-            <span>Timeline</span>
+            <span>Página Inicial</span>
           </NavLink>
 
-          <NavLink to="/novo" className={linkClass}>
-            <PlusCircle size={20} aria-hidden="true" />
-            <span>Soltar Fofoca</span>
+          <NavLink to="/buscar" className={linkClass}>
+            <Search size={20} aria-hidden="true" />
+            <span>Buscar</span>
           </NavLink>
 
           <NavLink to="/perfil" className={linkClass}>
@@ -45,10 +45,10 @@ export function Navbar() {
       <div className="hidden md:block mt-8 p-4 border border-white/30 rounded-xl bg-zinc-950">
         <div className="flex items-center gap-2 text-purple-400 font-bold text-sm mb-1">
           <Sparkles size={16} aria-hidden="true" />
-          <span>Identidade Dupla</span>
+          <span>Dica Rápida</span>
         </div>
         <p className="text-xs text-zinc-300 leading-relaxed">
-          Configure seu <strong className="text-white">Perfil</strong> com capa e foto estilo X, e publique usando seu <strong className="text-purple-400">@codinome</strong> secreto!
+          Na caixa de postagem, clique no seu nome embaixo do texto para colocar o <strong className="text-purple-400">🎩 Chapéu Anônimo</strong>!
         </p>
       </div>
     </header>
