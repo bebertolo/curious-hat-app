@@ -2,14 +2,11 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Edit3,
-  Shield,
   Calendar,
   Plus,
   UserCheck,
-  Mail,
-  Cake,
   LogOut,
+  ArrowLeft,
 } from "lucide-react";
 import { getPosts, updatePost, deletePost } from "../services/api";
 import { GossipCard } from "../components/GossipCard";
@@ -29,17 +26,19 @@ export function Profile({ onProfileSaved, onLogout }) {
     return dados ? JSON.parse(dados) : null;
   });
 
-  // Se ainda não tem perfil cadastrado, abre direto no formulário de cadastro/edição
   const [editando, setEditando] = useState(!perfilSalvo);
+  const [abaAtiva, setAbaAtiva] = useState("posts");
+  const [enviandoCadastro, setEnviandoCadastro] = useState(false);
 
   const [form, setForm] = useState({
+    userId: perfilSalvo?.userId || "",
     fullName: perfilSalvo?.fullName || "",
     email: perfilSalvo?.email || "",
     birthDate: perfilSalvo?.birthDate || "",
     accountName: perfilSalvo?.accountName || "",
     codename: perfilSalvo?.codename || "",
     password: perfilSalvo?.password || "",
-    bio: perfilSalvo?.bio || "Observando tudo em silêncio no Curious Hat...",
+    bio: perfilSalvo?.bio || "Observando tudo no Curious Hat.",
     avatarUrl: perfilSalvo?.avatarUrl || AVATAR_PADRAO,
     bannerImage: perfilSalvo?.bannerImage || "",
     joinedAt: perfilSalvo?.joinedAt || "Outubro de 2026",
@@ -51,29 +50,28 @@ export function Profile({ onProfileSaved, onLogout }) {
   const [postParaDeletar, setPostParaDeletar] = useState(null);
 
   useEffect(() => {
-    if (perfilSalvo) {
-      carregarMeusPosts(perfilSalvo);
+    if (perfilSalvo?.userId) {
+      carregarMeusPosts(perfilSalvo.userId);
     }
   }, [perfilSalvo]);
 
-  async function carregarMeusPosts(perfil) {
+  // Busca APENAS os posts públicos vinculados ao userId deste perfil.
+  // Posts anônimos (isAnonymous: true) NUNCA são vinculados ao perfil!
+  async function carregarMeusPosts(userIdAtual) {
     try {
       setLoadingPosts(true);
       const todos = await getPosts();
-      const filtrados = todos.filter(
-        (p) =>
-          p.codename?.toLowerCase() === perfil.codename?.toLowerCase() ||
-          p.codename?.toLowerCase() === perfil.accountName?.toLowerCase()
+      const vinculadosAoPerfil = todos.filter(
+        (p) => !p.isAnonymous && p.authorId === userIdAtual
       );
-      setMeusPosts(filtrados);
+      setMeusPosts(vinculadosAoPerfil);
     } catch {
-      // Silencioso se a API estiver vazia
+      // Silencioso caso a API ainda esteja vazia
     } finally {
       setLoadingPosts(false);
     }
   }
 
-  // Converte a foto escolhida no PC ou Celular para imagem real (comprimida para caber no navegador)
   function handleImageUpload(event, campoDestino, larguraMax = 400) {
     const arquivo = event.target.files?.[0];
     if (!arquivo) return;
@@ -111,16 +109,16 @@ export function Profile({ onProfileSaved, onLogout }) {
       novosErros.birthDate = "Informe sua data de nascimento.";
     }
     if (!form.accountName.trim() || form.accountName.trim().length < 3) {
-      novosErros.accountName = "Escolha como seu nome aparecerá no site (mínimo 3 letras).";
+      novosErros.accountName = "Escolha seu Nome no Site (mínimo 3 letras).";
     }
     if (!form.codename.trim() || form.codename.trim().length < 3) {
-      novosErros.codename = "Escolha seu Vulgo para postagens anônimas (mínimo 3 letras).";
+      novosErros.codename = "Escolha seu Vulgo secreto (mínimo 3 letras).";
     }
     if (!form.password || form.password.length < 6) {
-      novosErros.password = "Crie uma senha de acesso com pelo menos 6 caracteres.";
+      novosErros.password = "A senha deve ter pelo menos 6 caracteres.";
     }
     if (!form.bio.trim() || form.bio.trim().length < 5) {
-      novosErros.bio = "Escreva uma bio curta para o seu perfil.";
+      novosErros.bio = "Escreva uma bio para o seu perfil.";
     }
 
     setErros(novosErros);
@@ -134,25 +132,80 @@ export function Profile({ onProfileSaved, onLogout }) {
     }
   }
 
-  function handleSalvar(e) {
+  // Envia o e-mail real de confirmação usando FormSubmit AJAX
+  async function dispararEmailConfirmacao(emailDestino, nomeUsuario) {
+    try {
+      await fetch(`https://formsubmit.co/ajax/${encodeURIComponent(emailDestino)}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          _subject: "Bem-vindo ao Curious Hat! Confirmação de Conta 🎩",
+          Nome: nomeUsuario,
+          Mensagem: `Olá, ${nomeUsuario}! Sua conta no Curious Hat foi criada com sucesso. Use seu e-mail (${emailDestino}) e sua senha sempre que quiser entrar.`,
+          _template: "table",
+        }),
+      });
+    } catch {
+      // Se o usuário estiver sem internet no momento, o cadastro prossegue normalmente
+    }
+  }
+
+  async function handleSalvar(e) {
     e.preventDefault();
     if (!validarFormulario()) return;
 
+    setEnviandoCadastro(true);
+    const eraContaNova = !perfilSalvo;
+
+    // Gera um ID único para este perfil (garante que posts antigos nunca se misturem)
+    const idUnico =
+      perfilSalvo?.userId || `user_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+
+    const handlePublico = form.accountName
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9_]/g, "");
+
     const dadosFinais = {
       ...form,
+      userId: idUnico,
       fullName: form.fullName.trim(),
       email: form.email.trim(),
       accountName: form.accountName.trim(),
+      publicHandle: handlePublico || "usuario",
       codename: form.codename.trim().replace(/^@/, "").replace(/\s+/g, ""),
       bio: form.bio.trim(),
     };
 
+    // Salva na lista de contas cadastradas para permitir Login futuro apenas com E-mail e Senha
+    const usuariosExistentes = JSON.parse(localStorage.getItem("curiousHat_users") || "[]");
+    const outrosUsuarios = usuariosExistentes.filter(
+      (u) => u.userId !== idUnico && u.email.toLowerCase() !== dadosFinais.email.toLowerCase()
+    );
+    localStorage.setItem(
+      "curiousHat_users",
+      JSON.stringify([...outrosUsuarios, dadosFinais])
+    );
+
     localStorage.setItem("curiousHat_profile", JSON.stringify(dadosFinais));
+
+    let msgEmail = "";
+    if (eraContaNova) {
+      await dispararEmailConfirmacao(dadosFinais.email, dadosFinais.accountName);
+      msgEmail = `Conta criada! Enviamos um e-mail de confirmação para ${dadosFinais.email}.`;
+    }
+
+    setEnviandoCadastro(false);
     setPerfilSalvo(dadosFinais);
     setEditando(false);
 
     if (onProfileSaved) {
-      onProfileSaved(dadosFinais);
+      onProfileSaved(dadosFinais, msgEmail);
     }
   }
 
@@ -171,44 +224,41 @@ export function Profile({ onProfileSaved, onLogout }) {
     setPostParaDeletar(null);
   }
 
-  // MODO 1: TELA DE CADASTRO INICIAL OU EDIÇÃO DE PERFIL
+  // MODO 1: TELA DE CADASTRO OU EDIÇÃO DE PERFIL
   if (editando) {
     return (
       <div className="p-4 sm:p-6 max-w-2xl mx-auto">
-        <div className="border-b border-white pb-4 mb-6 text-center sm:text-left">
+        <div className="border-b border-white/30 pb-4 mb-6">
           <h1 className="text-2xl font-extrabold text-white">
-            {perfilSalvo ? "Editar Meu Perfil 🎩" : "Bem-vindo ao Curious Hat 🎩"}
+            {perfilSalvo ? "Editar Perfil" : "Criar sua conta no Curious Hat 🎩"}
           </h1>
-          <p className="text-zinc-300 text-sm mt-1">
+          <p className="text-zinc-400 text-xs sm:text-sm mt-1">
             {perfilSalvo
-              ? "Passe o cursor sobre a foto ou capa para enviar uma imagem do seu dispositivo."
-              : "Cadastre suas informações abaixo para liberar o acesso ao site."}
+              ? "Passe o cursor sobre a foto ou capa para clicar no '+' e enviar uma imagem do seu dispositivo."
+              : "Seu e-mail e senha serão usados apenas para login. Seu Vulgo é 100% secreto e nunca aparecerá no seu perfil."}
           </p>
         </div>
 
-        {/* ÁREA DE FOTO DE PERFIL E PAPEL DE PAREDE COM EFEITO HOVER "+" */}
-        <div className="mb-6 border border-white/40 rounded-2xl overflow-hidden bg-zinc-950">
-          {/* Papel de Parede (Capa) Clicável */}
+        {/* UPLOAD DE CAPA E FOTO COM EFEITO OPACO E "+" BRANCO */}
+        <div className="mb-6 border border-white/30 rounded-2xl overflow-hidden bg-zinc-950">
           <div
             onClick={() => fileInputBannerRef.current?.click()}
             role="button"
             tabIndex={0}
             onKeyDown={(e) => e.key === "Enter" && fileInputBannerRef.current?.click()}
-            aria-label="Alterar imagem de papel de parede"
-            title="Clique para escolher um papel de parede dos seus arquivos"
-            className="relative h-36 sm:h-44 w-full bg-gradient-to-r from-purple-900 via-fuchsia-900 to-red-900 cursor-pointer group overflow-hidden"
+            aria-label="Alterar papel de parede"
+            className="relative h-36 sm:h-44 w-full bg-gradient-to-r from-purple-900 via-zinc-900 to-red-950 cursor-pointer group overflow-hidden"
           >
             {form.bannerImage && (
               <img
                 src={form.bannerImage}
-                alt="Papel de parede do perfil"
-                className="w-full h-full object-cover"
+                alt="Capa do perfil"
+                className="w-full h-full object-cover group-hover:opacity-50 transition-opacity"
               />
             )}
-            {/* Camada opaca + ícone "+" branco ao passar o mouse na capa */}
-            <div className="absolute inset-0 bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white">
-              <Plus size={36} strokeWidth={2.5} className="text-white" />
-              <span className="text-xs font-bold mt-1">Alterar Papel de Parede</span>
+            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white">
+              <Plus size={38} strokeWidth={2.5} className="text-white" />
+              <span className="text-xs font-bold mt-1">Escolher Papel de Parede</span>
             </div>
             <input
               ref={fileInputBannerRef}
@@ -219,15 +269,13 @@ export function Profile({ onProfileSaved, onLogout }) {
             />
           </div>
 
-          {/* Foto de Perfil Redonda com Efeito Opaco e "+" Branco ao passar o cursor */}
           <div className="px-5 pb-4 flex items-end justify-between -mt-14 relative">
             <div
               onClick={() => fileInputAvatarRef.current?.click()}
               role="button"
               tabIndex={0}
               onKeyDown={(e) => e.key === "Enter" && fileInputAvatarRef.current?.click()}
-              aria-label="Alterar foto de perfil escolhendo dos arquivos"
-              title="Clique para enviar uma foto do computador ou celular"
+              aria-label="Alterar foto de perfil"
               className="relative w-28 h-28 rounded-full border-4 border-black bg-zinc-900 overflow-hidden cursor-pointer group shadow-xl"
             >
               <img
@@ -235,7 +283,6 @@ export function Profile({ onProfileSaved, onLogout }) {
                 alt="Foto de perfil"
                 className="w-full h-full object-cover group-hover:opacity-40 transition-opacity"
               />
-              {/* Sinal de "+" Branco que aparece ao passar o mouse em cima */}
               <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40">
                 <Plus size={42} strokeWidth={3} className="text-white drop-shadow" />
               </div>
@@ -248,139 +295,52 @@ export function Profile({ onProfileSaved, onLogout }) {
               />
             </div>
 
-            <span className="text-xs text-zinc-300 italic">
-              Passe o mouse na foto e clique no <strong>+</strong> para mudar
+            <span className="text-xs text-zinc-400">
+              Clique na foto ou capa para enviar arquivo
             </span>
           </div>
         </div>
 
-        {/* FORMULÁRIO COM TODOS OS DADOS DO CADASTRO */}
         <form onSubmit={handleSalvar} noValidate className="space-y-4">
-          {/* 1. Nome Completo */}
-          <div>
-            <label htmlFor="fullName" className="block font-bold text-white text-sm mb-1">
-              1. Nome Completo *
-            </label>
-            <input
-              id="fullName"
-              type="text"
-              placeholder="Ex: Bernardo Teleken"
-              value={form.fullName}
-              onChange={(e) => handleChange("fullName", e.target.value)}
-              className="w-full bg-black border border-white p-3 rounded-xl text-white"
-            />
-            {erros.fullName && (
-              <p role="alert" className="text-red-400 text-xs font-bold mt-1">
-                ⚠️ {erros.fullName}
-              </p>
-            )}
-          </div>
-
-          {/* 2. E-mail e 3. Data de Nascimento */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="email" className="block font-bold text-white text-sm mb-1">
-                2. E-mail *
-              </label>
-              <input
-                id="email"
-                type="email"
-                placeholder="seuemail@exemplo.com"
-                value={form.email}
-                onChange={(e) => handleChange("email", e.target.value)}
-                className="w-full bg-black border border-white p-3 rounded-xl text-white"
-              />
-              {erros.email && (
-                <p role="alert" className="text-red-400 text-xs font-bold mt-1">
-                  ⚠️ {erros.email}
-                </p>
-              )}
-            </div>
-
-            <div>
-              <label htmlFor="birthDate" className="block font-bold text-white text-sm mb-1">
-                3. Data de Nascimento *
-              </label>
-              <input
-                id="birthDate"
-                type="date"
-                value={form.birthDate}
-                onChange={(e) => handleChange("birthDate", e.target.value)}
-                className="w-full bg-black border border-white p-3 rounded-xl text-white"
-              />
-              {erros.birthDate && (
-                <p role="alert" className="text-red-400 text-xs font-bold mt-1">
-                  ⚠️ {erros.birthDate}
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* 4. Nome no Site e 5. Vulgo (Nome Anônimo) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label htmlFor="accountName" className="block font-bold text-white text-sm mb-1">
-                4. Nome no Site (Público) *
+                Nome no Site (Público no Perfil) *
               </label>
               <input
                 id="accountName"
                 type="text"
-                placeholder="Ex: Bernardo"
+                placeholder="Ex: Bernardo Bertolo"
                 value={form.accountName}
                 onChange={(e) => handleChange("accountName", e.target.value)}
-                className="w-full bg-black border border-white p-3 rounded-xl text-white"
+                className="w-full bg-black border border-white p-3 rounded-xl text-white text-sm"
               />
               {erros.accountName && (
-                <p role="alert" className="text-red-400 text-xs font-bold mt-1">
-                  ⚠️ {erros.accountName}
-                </p>
+                <p role="alert" className="text-red-400 text-xs font-bold mt-1">⚠️ {erros.accountName}</p>
               )}
             </div>
 
             <div>
               <label htmlFor="codename" className="block font-bold text-purple-400 text-sm mb-1">
-                5. Vulgo (Para Nome Anônimo 🎩) *
+                Vulgo Anônimo (Oculto do Perfil 🎩) *
               </label>
               <input
                 id="codename"
                 type="text"
-                placeholder="Ex: SombraDaNoite"
+                placeholder="Ex: SombraDoBlocoC"
                 value={form.codename}
                 onChange={(e) => handleChange("codename", e.target.value)}
-                className="w-full bg-black border border-purple-400 p-3 rounded-xl text-white"
+                className="w-full bg-black border border-purple-400 p-3 rounded-xl text-white text-sm"
               />
               {erros.codename && (
-                <p role="alert" className="text-red-400 text-xs font-bold mt-1">
-                  ⚠️ {erros.codename}
-                </p>
+                <p role="alert" className="text-red-400 text-xs font-bold mt-1">⚠️ {erros.codename}</p>
               )}
             </div>
           </div>
 
-          {/* 6. Senha de Acesso */}
-          <div>
-            <label htmlFor="password" className="block font-bold text-white text-sm mb-1">
-              6. Senha da Conta *
-            </label>
-            <input
-              id="password"
-              type="password"
-              placeholder="Mínimo de 6 caracteres"
-              value={form.password}
-              onChange={(e) => handleChange("password", e.target.value)}
-              className="w-full bg-black border border-white p-3 rounded-xl text-white"
-            />
-            {erros.password && (
-              <p role="alert" className="text-red-400 text-xs font-bold mt-1">
-                ⚠️ {erros.password}
-              </p>
-            )}
-          </div>
-
-          {/* 7. Bio do Perfil */}
           <div>
             <label htmlFor="bio" className="block font-bold text-white text-sm mb-1">
-              7. Bio / Recado do Perfil *
+              Bio do Perfil *
             </label>
             <textarea
               id="bio"
@@ -388,13 +348,88 @@ export function Profile({ onProfileSaved, onLogout }) {
               maxLength={160}
               value={form.bio}
               onChange={(e) => handleChange("bio", e.target.value)}
-              className="w-full bg-black border border-white p-3 rounded-xl text-white"
+              className="w-full bg-black border border-white p-3 rounded-xl text-white text-sm"
             />
             {erros.bio && (
-              <p role="alert" className="text-red-400 text-xs font-bold mt-1">
-                ⚠️ {erros.bio}
-              </p>
+              <p role="alert" className="text-red-400 text-xs font-bold mt-1">⚠️ {erros.bio}</p>
             )}
+          </div>
+
+          <div className="pt-2 border-t border-white/20">
+            <p className="text-xs text-zinc-400 mb-3 font-semibold">
+              🔒 Dados privados de cadastro e login (não aparecem no seu perfil público):
+            </p>
+
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="fullName" className="block font-bold text-white text-sm mb-1">
+                  Nome Completo *
+                </label>
+                <input
+                  id="fullName"
+                  type="text"
+                  placeholder="Seu nome completo"
+                  value={form.fullName}
+                  onChange={(e) => handleChange("fullName", e.target.value)}
+                  className="w-full bg-black border border-white/60 p-3 rounded-xl text-white text-sm"
+                />
+                {erros.fullName && (
+                  <p role="alert" className="text-red-400 text-xs font-bold mt-1">⚠️ {erros.fullName}</p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="email" className="block font-bold text-white text-sm mb-1">
+                    E-mail (Para Login e Confirmação) *
+                  </label>
+                  <input
+                    id="email"
+                    type="email"
+                    placeholder="seuemail@exemplo.com"
+                    value={form.email}
+                    onChange={(e) => handleChange("email", e.target.value)}
+                    className="w-full bg-black border border-white/60 p-3 rounded-xl text-white text-sm"
+                  />
+                  {erros.email && (
+                    <p role="alert" className="text-red-400 text-xs font-bold mt-1">⚠️ {erros.email}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label htmlFor="birthDate" className="block font-bold text-white text-sm mb-1">
+                    Data de Nascimento *
+                  </label>
+                  <input
+                    id="birthDate"
+                    type="date"
+                    value={form.birthDate}
+                    onChange={(e) => handleChange("birthDate", e.target.value)}
+                    className="w-full bg-black border border-white/60 p-3 rounded-xl text-white text-sm"
+                  />
+                  {erros.birthDate && (
+                    <p role="alert" className="text-red-400 text-xs font-bold mt-1">⚠️ {erros.birthDate}</p>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="password" className="block font-bold text-white text-sm mb-1">
+                  Senha de Acesso *
+                </label>
+                <input
+                  id="password"
+                  type="password"
+                  placeholder="Mínimo de 6 caracteres"
+                  value={form.password}
+                  onChange={(e) => handleChange("password", e.target.value)}
+                  className="w-full bg-black border border-white/60 p-3 rounded-xl text-white text-sm"
+                />
+                {erros.password && (
+                  <p role="alert" className="text-red-400 text-xs font-bold mt-1">⚠️ {erros.password}</p>
+                )}
+              </div>
+            </div>
           </div>
 
           <div className="flex justify-end gap-3 pt-4 border-t border-white/30">
@@ -403,9 +438,15 @@ export function Profile({ onProfileSaved, onLogout }) {
                 Cancelar
               </HatButton>
             )}
-            <HatButton type="submit" variant="purple">
+            <HatButton type="submit" variant="purple" disabled={enviandoCadastro}>
               <UserCheck size={18} aria-hidden="true" />
-              <span>{perfilSalvo ? "Salvar Alterações" : "Concluir Cadastro e Entrar"}</span>
+              <span>
+                {enviandoCadastro
+                  ? "Enviando confirmação..."
+                  : perfilSalvo
+                  ? "Salvar Perfil"
+                  : "Criar Conta e Enviar E-mail"}
+              </span>
             </HatButton>
           </div>
         </form>
@@ -413,11 +454,35 @@ export function Profile({ onProfileSaved, onLogout }) {
     );
   }
 
-  // MODO 2: PÁGINA DO PERFIL ESTILO X (ANTIGO TWITTER)
+  // Filtra os posts conforme a aba do Twitter/X selecionada
+  const postsExibidos =
+    abaAtiva === "curtidas"
+      ? meusPosts.filter((p) => (Number(p.likes) || 0) > 0)
+      : meusPosts;
+
+  // MODO 2: PÁGINA DE PERFIL IDÊNTICA AO X (TWITTER) — SEM MOSTRAR O VULGO ANÔNIMO
   return (
     <div>
-      {/* Papel de Parede */}
-      <div className="h-40 sm:h-52 w-full border-b border-white/40 bg-gradient-to-r from-purple-900 via-fuchsia-900 to-red-900 overflow-hidden">
+      {/* Barra Superior Estilo X/Twitter com seta de voltar, Nome e Contador de Posts */}
+      <div className="sticky top-0 z-10 bg-black/85 backdrop-blur-md px-4 py-2.5 border-b border-white/25 flex items-center gap-6">
+        <button
+          type="button"
+          onClick={() => navigate("/")}
+          aria-label="Voltar para a Página Inicial"
+          className="p-2 rounded-full hover:bg-zinc-900 text-white transition cursor-pointer"
+        >
+          <ArrowLeft size={20} aria-hidden="true" />
+        </button>
+        <div>
+          <h1 className="text-lg font-extrabold text-white leading-tight">
+            {perfilSalvo.accountName}
+          </h1>
+          <p className="text-xs text-zinc-400">{meusPosts.length} posts</p>
+        </div>
+      </div>
+
+      {/* Papel de Parede (Banner) */}
+      <div className="h-44 sm:h-52 w-full bg-gradient-to-r from-purple-900 via-zinc-900 to-red-950 overflow-hidden border-b border-white/20">
         {perfilSalvo.bannerImage && (
           <img
             src={perfilSalvo.bannerImage}
@@ -427,18 +492,18 @@ export function Profile({ onProfileSaved, onLogout }) {
         )}
       </div>
 
-      {/* Cabeçalho do Perfil */}
-      <div className="px-4 sm:px-6 pb-5 border-b border-white">
-        <div className="flex flex-wrap justify-between items-end -mt-14 sm:-mt-16 mb-3 gap-2">
-          {/* Clicar na foto aqui também abre direto a edição para trocá-la */}
+      {/* Informações Principais Estilo Twitter/X */}
+      <div className="px-4 sm:px-6 pb-4">
+        {/* Foto Redonda Sobreposta + Botão Editar Perfil */}
+        <div className="flex justify-between items-end -mt-16 sm:-mt-20 mb-3">
           <div
             onClick={() => setEditando(true)}
-            title="Clique para editar foto e perfil"
-            className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-full border-4 border-black bg-zinc-900 overflow-hidden cursor-pointer group shadow-lg"
+            title="Clique para trocar sua foto"
+            className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-full border-4 border-black bg-zinc-900 overflow-hidden cursor-pointer group shadow-xl"
           >
             <img
               src={perfilSalvo.avatarUrl}
-              alt={`Foto de ${perfilSalvo.accountName}`}
+              alt={perfilSalvo.accountName}
               className="w-full h-full object-cover group-hover:opacity-40 transition-opacity"
             />
             <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40">
@@ -446,84 +511,100 @@ export function Profile({ onProfileSaved, onLogout }) {
             </div>
           </div>
 
-          <div className="flex gap-2">
-            <HatButton variant="outline" onClick={() => setEditando(true)}>
-              <Edit3 size={16} aria-hidden="true" />
-              <span>Editar Perfil</span>
-            </HatButton>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setEditando(true)}
+              className="px-4 py-1.5 rounded-full border border-white/50 hover:bg-zinc-900 text-white font-bold text-sm transition cursor-pointer"
+            >
+              Editar perfil
+            </button>
             {onLogout && (
-              <HatButton
-                variant="red"
+              <button
+                type="button"
                 onClick={onLogout}
-                ariaLabel="Sair da conta e voltar para tela de cadastro"
+                title="Sair da conta"
+                className="p-2 rounded-full border border-red-500/50 hover:bg-red-950/50 text-red-400 transition cursor-pointer"
               >
-                <LogOut size={16} aria-hidden="true" />
-                <span>Sair</span>
-              </HatButton>
+                <LogOut size={18} aria-hidden="true" />
+              </button>
             )}
           </div>
         </div>
 
-        {/* Nome no Site e Vulgo Anônimo */}
-        <h1 className="text-2xl font-black text-white leading-tight">
-          {perfilSalvo.accountName}
-        </h1>
-        <div className="flex flex-wrap items-center gap-2 mt-1 mb-3">
-          <span className="text-purple-400 font-bold text-sm">
-            🎩 Vulgo: @{perfilSalvo.codename}
-          </span>
-          <span className="text-xs bg-zinc-900 border border-white/30 text-zinc-300 px-2.5 py-0.5 rounded-full">
-            Nome completo: {perfilSalvo.fullName}
-          </span>
+        {/* Nome Público e @handle (O Vulgo Anônimo NÃO aparece aqui!) */}
+        <div className="mb-3">
+          <h2 className="text-xl font-black text-white leading-tight">
+            {perfilSalvo.accountName}
+          </h2>
+          <p className="text-sm text-zinc-400">
+            @{perfilSalvo.publicHandle || perfilSalvo.accountName.toLowerCase().replace(/\s+/g, "")}
+          </p>
         </div>
 
         {/* Bio */}
-        <p className="text-zinc-100 text-sm leading-relaxed mb-4">
+        <p className="text-white text-sm leading-relaxed mb-3">
           {perfilSalvo.bio}
         </p>
 
-        {/* Detalhes da Conta (E-mail, Data de Nascimento e Entrada) */}
-        <div className="flex flex-wrap items-center gap-4 text-xs text-zinc-300 pt-2 border-t border-white/20">
-          <span className="flex items-center gap-1">
-            <Mail size={14} className="text-purple-400" aria-hidden="true" />
-            {perfilSalvo.email}
+        {/* Data de Entrada estilo Twitter */}
+        <div className="flex items-center gap-2 text-xs text-zinc-400 mb-3">
+          <Calendar size={15} aria-hidden="true" />
+          <span>Ingressou em {perfilSalvo.joinedAt}</span>
+        </div>
+
+        {/* Contadores Seguindo / Seguidores estilo Twitter */}
+        <div className="flex items-center gap-5 text-sm">
+          <span className="text-zinc-400">
+            <strong className="text-white">14</strong> Seguindo
           </span>
-          {perfilSalvo.birthDate && (
-            <span className="flex items-center gap-1">
-              <Cake size={14} className="text-red-400" aria-hidden="true" />
-              Nasc.: {perfilSalvo.birthDate.split("-").reverse().join("/")}
-            </span>
-          )}
-          <span className="flex items-center gap-1">
-            <Calendar size={14} className="text-purple-400" aria-hidden="true" />
-            Entrou em {perfilSalvo.joinedAt}
+          <span className="text-zinc-400">
+            <strong className="text-white">28</strong> Seguidores
           </span>
         </div>
       </div>
 
-      {/* Histórico de Publicações do Usuário */}
-      <div className="border-b border-white/40 px-6 py-3 bg-zinc-950 flex justify-between items-center">
-        <span className="font-extrabold text-purple-400 border-b-2 border-purple-400 pb-2 text-sm">
-          Minhas Publicações ({meusPosts.length})
-        </span>
-        <span className="text-xs text-zinc-400 flex items-center gap-1">
-          <Shield size={13} aria-hidden="true" /> Públicas e Anônimas
-        </span>
+      {/* Abas de Navegação do Perfil Estilo X (Posts / Fogos) */}
+      <div className="grid grid-cols-2 border-b border-white/30 text-sm font-bold text-center">
+        <button
+          type="button"
+          onClick={() => setAbaAtiva("posts")}
+          className={`py-3.5 hover:bg-zinc-900/60 transition cursor-pointer relative ${
+            abaAtiva === "posts" ? "text-white" : "text-zinc-400"
+          }`}
+        >
+          <span>Posts</span>
+          {abaAtiva === "posts" && (
+            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-16 h-1 bg-purple-500 rounded-full" />
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setAbaAtiva("curtidas")}
+          className={`py-3.5 hover:bg-zinc-900/60 transition cursor-pointer relative ${
+            abaAtiva === "curtidas" ? "text-white" : "text-zinc-400"
+          }`}
+        >
+          <span>Fogos</span>
+          {abaAtiva === "curtidas" && (
+            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-16 h-1 bg-purple-500 rounded-full" />
+          )}
+        </button>
       </div>
 
+      {/* Lista de Posts Vinculados ao Perfil */}
       {loadingPosts ? (
-        <p className="p-8 text-center text-zinc-300">Carregando suas publicações...</p>
-      ) : meusPosts.length === 0 ? (
-        <div className="p-10 text-center space-y-3">
-          <p className="text-zinc-300 text-sm">
-            Você ainda não fez nenhuma publicação. Vá até a Página Inicial para postar!
+        <p className="p-8 text-center text-zinc-400 text-sm">Carregando posts...</p>
+      ) : postsExibidos.length === 0 ? (
+        <div className="p-10 text-center space-y-2">
+          <p className="text-white font-bold text-base">Nenhum post público por aqui ainda</p>
+          <p className="text-zinc-400 text-xs max-w-sm mx-auto">
+            As publicações feitas com seu nome aparecerão aqui. (Suas fofocas anônimas com 🎩 ficam ocultas e nunca são vinculadas ao seu perfil).
           </p>
-          <HatButton variant="purple" onClick={() => navigate("/")} className="mx-auto">
-            Ir para a Página Inicial
-          </HatButton>
         </div>
       ) : (
-        meusPosts.map((post) => (
+        postsExibidos.map((post) => (
           <GossipCard
             key={post.id}
             post={post}
