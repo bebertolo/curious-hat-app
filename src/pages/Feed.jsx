@@ -1,11 +1,10 @@
 
 import { useState, useEffect } from "react";
-import { RefreshCw, Send, Clock } from "lucide-react";
+import { RefreshCw, Send } from "lucide-react";
 import { getPosts, createPost, togglePostLike, deletePost } from "../services/api";
 import { GossipCard } from "../components/GossipCard";
 import { ConfirmModal } from "../components/ConfirmModal";
 import { HatButton } from "../components/HatButton";
-
 export function Feed() {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -16,7 +15,6 @@ export function Feed() {
   });
   const [textoNovidade, setTextoNovidade] = useState("");
   const [modoAnonimo, setModoAnonimo] = useState(false);
-  const [postTemporario, setPostTemporario] = useState(true);
   const [erroPostRapido, setErroPostRapido] = useState("");
   const [publicando, setPublicando] = useState(false);
   const [postParaDeletar, setPostParaDeletar] = useState(null);
@@ -46,11 +44,9 @@ export function Feed() {
       setPublicando(true);
       setErroPostRapido("");
       const agora = Date.now();
-      const usarTemporizador = modoAnonimo && postTemporario;
-      const expiresAt = usarTemporizador
-        ? agora + 15 * 60 * 1000
+      const expiresAt = modoAnonimo
+        ? agora + 24 * 60 * 60 * 1000
         : agora + 100 * 365 * 24 * 60 * 60 * 1000;
-
       const novo = await createPost({
         authorId: modoAnonimo ? null : perfil?.userId,
         authorAvatar: modoAnonimo ? null : perfil?.avatarUrl,
@@ -71,7 +67,6 @@ export function Feed() {
         expiresAt: expiresAt,
         replies: [],
       });
-
       setPosts((listaAtual) => [novo, ...listaAtual]);
       setTextoNovidade("");
     } catch (err) {
@@ -133,7 +128,7 @@ export function Feed() {
             )}
             <div className="flex-1">
               <label htmlFor="caixa-novidades" className="sr-only">
-                Qual os babados
+                Qual as novidades
               </label>
               <textarea
                 id="caixa-novidades"
@@ -155,48 +150,31 @@ export function Feed() {
             </p>
           )}
           <div className="flex flex-wrap items-center justify-between gap-4 mt-4 pt-2 pl-2">
-            <div className="flex flex-wrap items-center gap-6">
-              <button
-                type="button"
-                onClick={() => setModoAnonimo(!modoAnonimo)}
-                title="Clique para alternar entre seu Perfil e seu Vulgo Anônimo"
-                className="relative inline-flex items-center py-1 px-1 bg-transparent border-0 cursor-pointer select-none group"
+            <button
+              type="button"
+              onClick={() => setModoAnonimo(!modoAnonimo)}
+              title="Clique para alternar entre seu Perfil e seu Vulgo Anônimo (24h)"
+              className="relative inline-flex items-center py-1 px-1 bg-transparent border-0 cursor-pointer select-none group"
+            >
+              <span
+                className={`relative inline-block text-base font-extrabold tracking-wide transition-colors ${
+                  modoAnonimo
+                    ? "text-purple-400"
+                    : "text-white group-hover:text-zinc-300"
+                }`}
               >
-                <span
-                  className={`relative inline-block text-base font-extrabold tracking-wide transition-colors ${
-                    modoAnonimo
-                      ? "text-purple-400"
-                      : "text-white group-hover:text-zinc-300"
-                  }`}
-                >
-                  {modoAnonimo && (
-                    <span
-                      className="absolute -top-3.5 -left-2 text-sm leading-none transform -rotate-12 pointer-events-none select-none drop-shadow"
-                      aria-hidden="true"
-                    >
-                      🎩
-                    </span>
-                  )}
-                  {modoAnonimo ? perfil?.codename : perfil?.accountName}
-                </span>
-              </button>
-              {modoAnonimo && (
-                <label
-                  htmlFor="check-temporario"
-                  className="flex items-center gap-2 text-xs text-zinc-200 cursor-pointer select-none bg-transparent border-0 py-1 hover:text-red-300 transition"
-                >
-                  <input
-                    id="check-temporario"
-                    type="checkbox"
-                    checked={postTemporario}
-                    onChange={(e) => setPostTemporario(e.target.checked)}
-                    className="w-4 h-4 accent-red-600 rounded cursor-pointer"
-                  />
-                  <Clock size={14} className="text-red-400" aria-hidden="true" />
-                  <span>Temporário (15m)</span>
-                </label>
-              )}
-            </div>
+                {modoAnonimo && (
+                  <span
+                    className="absolute -top-3.5 -left-2 text-sm leading-none transform -rotate-12 pointer-events-none select-none drop-shadow"
+                    aria-hidden="true"
+                  >
+                    🎩
+                  </span>
+                )}
+                {modoAnonimo ? perfil?.codename : perfil?.accountName}
+              </span>
+            </button>
+
             <HatButton type="submit" variant="purple" disabled={publicando}>
               <Send size={15} aria-hidden="true" />
               <span>{publicando ? "Postando..." : "Postar"}</span>
@@ -204,13 +182,11 @@ export function Feed() {
           </div>
         </form>
       </div>
-
       {error && (
         <div role="alert" className="m-4 p-4 border border-red-400 bg-red-950/70 text-white rounded-xl">
           {error}
         </div>
       )}
-
       {loading ? (
         <div className="p-12 text-center text-zinc-400">Carregando novidades...</div>
       ) : posts.length === 0 ? (
@@ -228,7 +204,6 @@ export function Feed() {
           />
         ))
       )}
-
       <ConfirmModal
         post={postParaDeletar}
         onCancel={() => setPostParaDeletar(null)}
