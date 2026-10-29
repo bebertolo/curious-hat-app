@@ -7,7 +7,6 @@ export function GossipCard({ post, onLike, onDeleteRequest, onExpire, showDetail
   const [tempoRestante, setTempoRestante] = useState("");
   const [jaCurtiu, setJaCurtiu] = useState(() => hasUserLiked(post));
   const [processandoLike, setProcessandoLike] = useState(false);
-
   useEffect(() => {
     setJaCurtiu(hasUserLiked(post));
   }, [post]);
@@ -15,8 +14,8 @@ export function GossipCard({ post, onLike, onDeleteRequest, onExpire, showDetail
     function calcularTempo() {
       const diferenca = Number(post.expiresAt) - Date.now();
       const cinquentaAnosEmMs = 50 * 365 * 24 * 60 * 60 * 1000;
-      if (diferenca > cinquentaAnosEmMs) {
-        setTempoRestante("💬 Comentário Fixo");
+      if (!post.isAnonymous || diferenca > cinquentaAnosEmMs) {
+        setTempoRestante("");
         return;
       }
       if (diferenca <= 0) {
@@ -37,15 +36,15 @@ export function GossipCard({ post, onLike, onDeleteRequest, onExpire, showDetail
     calcularTempo();
     const intervalo = setInterval(calcularTempo, 1000);
     return () => clearInterval(intervalo);
-  }, [post.expiresAt, post.id, onExpire]);
-
-  // Se não curtiu -> soma 1 Fogo. Se já curtiu -> retira o Fogo!
+  }, [post.expiresAt, post.id, post.isAnonymous, onExpire]);
   async function handleCliqueFogo() {
     if (processandoLike) return;
+
     const estavaCurtido = hasUserLiked(post);
     try {
       setProcessandoLike(true);
       setJaCurtiu(!estavaCurtido);
+
       await onLike({
         ...post,
         _toggleLikeAction: estavaCurtido ? "unlike" : "like",
@@ -108,17 +107,12 @@ export function GossipCard({ post, onLike, onDeleteRequest, onExpire, showDetail
                 </Link>
               )}
             </div>
-
-            <div
-              className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-mono font-bold ${
-                tempoRestante.includes("Fixo")
-                  ? "text-purple-300 bg-purple-950/40 border border-purple-400/60"
-                  : "text-red-400 bg-red-950/40 border border-red-400/60"
-              }`}
-            >
-              <Clock size={13} aria-hidden="true" />
-              <span>{tempoRestante}</span>
-            </div>
+            {tempoRestante && (
+              <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-mono font-bold text-red-400 bg-red-950/40 border border-red-400/60">
+                <Clock size={13} aria-hidden="true" />
+                <span>{tempoRestante}</span>
+              </div>
+            )}
           </div>
           {post.title && <h2 className="text-base font-bold text-white mb-1">{post.title}</h2>}
           <p className="text-zinc-100 whitespace-pre-wrap leading-relaxed mb-3 text-sm sm:text-base">
