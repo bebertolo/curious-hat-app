@@ -129,7 +129,7 @@ export default function App() {
               </h1>
 
               <p className="mt-4 text-zinc-400 text-sm sm:text-base max-w-sm font-medium">
-                Onde os segredos ganham voz, com hora marcada para sumir — ou para ficar.
+                Onde os segredos, balela, difamação, fake news e traições viram pauta para especilistas na vida alheia.
               </p>
             </div>
 
@@ -138,7 +138,6 @@ export default function App() {
               <div className="w-full max-w-sm p-8 rounded-3xl border border-white/25 bg-zinc-950/80 shadow-[0_0_40px_rgba(0,0,0,0.9)] text-center space-y-6">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-950/60 border border-purple-400/40 text-purple-300 text-xs font-bold">
                   <Sparkles size={14} aria-hidden="true" />
-                  <span>Acesso Exclusivo</span>
                 </div>
 
                 <div className="space-y-2">
