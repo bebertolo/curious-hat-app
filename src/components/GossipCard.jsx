@@ -38,35 +38,61 @@ export function GossipCard({ post, onLike, onDeleteRequest, onExpire, showDetail
     return () => clearInterval(intervalo);
   }, [post.expiresAt, post.id, onExpire]);
 
+  // Define o identificador do perfil (usa o authorId ou o nome caso seja um post antigo)
+  const perfilDestino = post.authorId || encodeURIComponent(post.codename);
+
   return (
     <article className="border-b border-white/30 p-4 sm:p-5 bg-black hover:bg-zinc-950 transition-colors">
       <div className="flex items-start gap-3">
-        {/* Se for anônimo, mostra apenas o chapéu secreto. Se for post de perfil, mostra a foto do perfil */}
-        {post.isAnonymous || !post.authorAvatar ? (
+        {/* Se for Anônimo: mostra o Chapéu sem link. Se for Público: Foto clicável que leva ao Perfil */}
+        {post.isAnonymous ? (
           <div
-            className="w-10 h-10 rounded-full bg-purple-950 border border-purple-400 flex items-center justify-center text-lg shrink-0"
-            title="Publicação Anônima Desvinculada"
+            className="w-10 h-10 rounded-full bg-purple-950 border border-purple-400 flex items-center justify-center text-lg shrink-0 select-none"
+            title="Identidade Anônima Oculta"
           >
             🎩
           </div>
         ) : (
-          <img
-            src={post.authorAvatar}
-            alt={post.codename}
-            className="w-10 h-10 rounded-full object-cover border border-white/30 shrink-0"
-          />
+          <Link
+            to={`/perfil/${perfilDestino}`}
+            title={`Ver perfil de ${post.codename}`}
+            className="shrink-0 group"
+          >
+            <img
+              src={
+                post.authorAvatar ||
+                `https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${encodeURIComponent(post.codename)}&backgroundColor=6b21a8`
+              }
+              alt={post.codename}
+              className="w-10 h-10 rounded-full object-cover border border-white/30 group-hover:border-purple-400 transition"
+            />
+          </Link>
         )}
 
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
             <div className="flex items-center gap-2">
-              <span className="font-extrabold text-white text-sm sm:text-base">
-                {post.isAnonymous ? `@${post.codename}` : post.codename}
-              </span>
-              {post.isAnonymous && (
-                <span className="text-[11px] bg-purple-950/80 text-purple-300 border border-purple-400/40 px-2 py-0.5 rounded-full font-semibold">
-                  Anônimo
-                </span>
+              {post.isAnonymous ? (
+                <>
+                  <span className="font-extrabold text-purple-300 text-sm sm:text-base">
+                    @{post.codename}
+                  </span>
+                  <span className="text-[11px] bg-purple-950/80 text-purple-300 border border-purple-400/40 px-2 py-0.5 rounded-full font-semibold">
+                    Anônimo
+                  </span>
+                </>
+              ) : (
+                <Link
+                  to={`/perfil/${perfilDestino}`}
+                  className="flex items-center gap-1.5 group"
+                >
+                  <span className="font-extrabold text-white group-hover:underline text-sm sm:text-base">
+                    {post.codename}
+                  </span>
+                  <span className="text-xs text-zinc-400">
+                    @{post.authorHandle || post.codename?.toLowerCase().replace(/\s+/g, "")}
+                  </span>
+                </Link>
               )}
             </div>
 

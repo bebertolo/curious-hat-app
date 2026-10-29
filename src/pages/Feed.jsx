@@ -58,12 +58,17 @@ export function Feed() {
         ? agora + 15 * 60 * 1000
         : agora + 100 * 365 * 24 * 60 * 60 * 1000;
 
-      // REGRA DE VÍNCULO:
-      // Se for anônimo: não vincula a nenhum authorId nem avatar, apenas ao Vulgo (codename).
-      // Se não for anônimo: vincula ao userId, foto e Nome no Site do perfil.
+      // Se for anônimo: zera todos os vínculos de perfil.
+      // Se for público: envia os dados públicos do perfil para que qualquer pessoa possa visitar o perfil dele!
       const novo = await createPost({
         authorId: modoAnonimo ? null : perfil?.userId,
         authorAvatar: modoAnonimo ? null : perfil?.avatarUrl,
+        authorBanner: modoAnonimo ? null : perfil?.bannerImage,
+        authorBio: modoAnonimo ? null : perfil?.bio,
+        authorHandle: modoAnonimo
+          ? null
+          : perfil?.publicHandle || perfil?.accountName?.toLowerCase().replace(/\s+/g, ""),
+        authorJoinedAt: modoAnonimo ? null : perfil?.joinedAt,
         codename: modoAnonimo ? perfil?.codename : perfil?.accountName,
         isAnonymous: modoAnonimo,
         title: "",
@@ -129,7 +134,6 @@ export function Feed() {
         </HatButton>
       </div>
 
-      {/* CAIXA DE POSTAGEM NO TOPO */}
       <div className="p-4 border-b border-white/40 bg-zinc-950/50">
         <form onSubmit={handlePublicarRapido} noValidate>
           <div className="flex gap-3">
@@ -172,7 +176,6 @@ export function Feed() {
 
           <div className="flex flex-wrap items-center justify-between gap-3 mt-4 pt-2">
             <div className="flex flex-wrap items-center gap-3">
-              {/* BOTÃO QUE ALTERNA ENTRE NOME DO PERFIL E VULGO ANÔNIMO COM CHAPÉU EM CIMA */}
               <button
                 type="button"
                 onClick={() => setModoAnonimo(!modoAnonimo)}
@@ -199,7 +202,6 @@ export function Feed() {
                 </span>
               </button>
 
-              {/* CAMPO PEQUENO PARA MARCAR TEMPO */}
               <label
                 htmlFor="check-temporario"
                 className="flex items-center gap-2 text-xs text-zinc-200 cursor-pointer select-none border border-white/30 px-3 py-2 rounded-xl bg-black hover:border-red-400 transition"

@@ -306,6 +306,15 @@ export default function App() {
                   />
                 }
               />
+              <Route
+                path="/perfil/:id"
+                element={
+                  <Profile
+                    onProfileSaved={(novoPerfil) => setPerfilAtivo(novoPerfil)}
+                    onLogout={handleLogout}
+                  />
+                }
+              />
             </Routes>
           </main>
         </div>

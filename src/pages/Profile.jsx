@@ -1,12 +1,14 @@
 // src/pages/Profile.jsx
 import { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   Calendar,
   Plus,
   UserCheck,
   LogOut,
   ArrowLeft,
+  UserPlus,
+  Check,
 } from "lucide-react";
 import { getPosts, updatePost, deletePost } from "../services/api";
 import { GossipCard } from "../components/GossipCard";
@@ -18,55 +20,121 @@ const AVATAR_PADRAO =
 
 export function Profile({ onProfileSaved, onLogout }) {
   const navigate = useNavigate();
+  const { id: idUrl } = useParams(); // Pega o ID ou nome do usuário quando clicamos no perfil de alguém
   const fileInputAvatarRef = useRef(null);
   const fileInputBannerRef = useRef(null);
 
-  const [perfilSalvo, setPerfilSalvo] = useState(() => {
+  const [meuPerfil, setMeuPerfil] = useState(() => {
     const dados = localStorage.getItem("curiousHat_profile");
     return dados ? JSON.parse(dados) : null;
   });
 
-  const [editando, setEditando] = useState(!perfilSalvo);
+  // Verifica se estamos visitando o perfil de outra pessoa
+  const visitandoOutroUsuario =
+    Boolean(idUrl) &&
+    idUrl !== meuPerfil?.userId &&
+    decodeURIComponent(idUrl).toLowerCase() !== meuPerfil?.accountName?.toLowerCase();
+
+  const [editando, setEditando] = useState(!meuPerfil && !visitandoOutroUsuario);
   const [abaAtiva, setAbaAtiva] = useState("posts");
   const [enviandoCadastro, setEnviandoCadastro] = useState(false);
 
+  // Estado para quando estamos vendo o perfil de outra pessoa
+  const [perfilVisitado, setPerfilVisitado] = useState(null);
+  const [seguindo, setSeguindo] = useState(false);
+
   const [form, setForm] = useState({
-    userId: perfilSalvo?.userId || "",
-    fullName: perfilSalvo?.fullName || "",
-    email: perfilSalvo?.email || "",
-    birthDate: perfilSalvo?.birthDate || "",
-    accountName: perfilSalvo?.accountName || "",
-    codename: perfilSalvo?.codename || "",
-    password: perfilSalvo?.password || "",
-    bio: perfilSalvo?.bio || "Observando tudo no Curious Hat.",
-    avatarUrl: perfilSalvo?.avatarUrl || AVATAR_PADRAO,
-    bannerImage: perfilSalvo?.bannerImage || "",
-    joinedAt: perfilSalvo?.joinedAt || "Outubro de 2026",
+    userId: meuPerfil?.userId || "",
+    fullName: meuPerfil?.fullName || "",
+    email: meuPerfil?.email || "",
+    birthDate: meuPerfil?.birthDate || "",
+    accountName: meuPerfil?.accountName || "",
+    codename: meuPerfil?.codename || "",
+    password: meuPerfil?.password || "",
+    bio: meuPerfil?.bio || "Observando tudo no Curious Hat.",
+    avatarUrl: meuPerfil?.avatarUrl || AVATAR_PADRAO,
+    bannerImage: meuPerfil?.bannerImage || "",
+    joinedAt: meuPerfil?.joinedAt || "Outubro de 2026",
   });
 
   const [erros, setErros] = useState({});
-  const [meusPosts, setMeusPosts] = useState([]);
+  const [postsDoPerfil, setPostsDoPerfil] = useState([]);
   const [loadingPosts, setLoadingPosts] = useState(false);
   const [postParaDeletar, setPostParaDeletar] = useState(null);
 
   useEffect(() => {
-    if (perfilSalvo?.userId) {
-      carregarMeusPosts(perfilSalvo.userId);
-    }
-  }, [perfilSalvo]);
+    carregarDadosDoPerfil();
+  }, [idUrl, meuPerfil]);
 
-  // Busca APENAS os posts públicos vinculados ao userId deste perfil.
-  // Posts anônimos (isAnonymous: true) NUNCA são vinculados ao perfil!
-  async function carregarMeusPosts(userIdAtual) {
+  async function carregarDadosDoPerfil() {
     try {
       setLoadingPosts(true);
-      const todos = await getPosts();
-      const vinculadosAoPerfil = todos.filter(
-        (p) => !p.isAnonymous && p.authorId === userIdAtual
-      );
-      setMeusPosts(vinculadosAoPerfil);
+      const todosOsPosts = await getPosts();
+
+      // CASO 1: Visitando o perfil de OUTRA pessoa que postou no feed
+      if (visitandoOutroUsuario) {
+        const idDecodificado = decodeURIComponent(idUrl);
+
+        // Filtra apenas os posts públicos dessa pessoa (nunca inclui posts anônimos)
+        const postsDessaPessoa = todosOsPosts.filter(
+          (p) =>
+            !p.isAnonymous &&
+            (p.authorId === idDecodificado ||
+              p.codename?.toLowerCase() === idDecodificado.toLowerCase())
+        );
+
+        setPostsDoPerfil(postsDessaPessoa);
+
+        // Tenta achar nos usuários locais ou reconstrói o perfil pelos dados públicos salvos no post
+        const usuariosLocais = JSON.parse(localStorage.getItem("curiousHat_users") || "[]");
+        const usuarioLocal = usuariosLocais.find(
+          (u) =>
+            u.userId === idDecodificado ||
+            u.accountName?.toLowerCase() === idDecodificado.toLowerCase()
+        );
+
+        const postMaisRecente = postsDessaPessoa[0];
+
+        if (usuarioLocal) {
+          setPerfilVisitado(usuarioLocal);
+        } else if (postMaisRecente) {
+          setPerfilVisitado({
+            userId: postMaisRecente.authorId || idDecodificado,
+            accountName: postMaisRecente.codename,
+            publicHandle:
+              postMaisRecente.authorHandle ||
+              postMaisRecente.codename?.toLowerCase().replace(/\s+/g, ""),
+            bio: postMaisRecente.authorBio || "Usuário do Curious Hat 🎩",
+            avatarUrl:
+              postMaisRecente.authorAvatar ||
+              `https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${encodeURIComponent(postMaisRecente.codename)}&backgroundColor=6b21a8`,
+            bannerImage: postMaisRecente.authorBanner || "",
+            joinedAt: postMaisRecente.authorJoinedAt || "Outubro de 2026",
+          });
+        } else {
+          setPerfilVisitado({
+            userId: idDecodificado,
+            accountName: idDecodificado,
+            publicHandle: idDecodificado.toLowerCase().replace(/\s+/g, ""),
+            bio: "Usuário do Curious Hat 🎩",
+            avatarUrl: `https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${encodeURIComponent(idDecodificado)}&backgroundColor=6b21a8`,
+            bannerImage: "",
+            joinedAt: "Outubro de 2026",
+          });
+        }
+      } else if (meuPerfil) {
+        // CASO 2: Vendo o MEU PRÓPRIO perfil
+        setPerfilVisitado(null);
+        const meusPostsPublicos = todosOsPosts.filter(
+          (p) =>
+            !p.isAnonymous &&
+            (p.authorId === meuPerfil.userId ||
+              (!p.authorId && p.codename?.toLowerCase() === meuPerfil.accountName?.toLowerCase()))
+        );
+        setPostsDoPerfil(meusPostsPublicos);
+      }
     } catch {
-      // Silencioso caso a API ainda esteja vazia
+      // Silencioso caso a API esteja vazia
     } finally {
       setLoadingPosts(false);
     }
@@ -98,7 +166,6 @@ export function Profile({ onProfileSaved, onLogout }) {
 
   function validarFormulario() {
     const novosErros = {};
-
     if (!form.fullName.trim() || form.fullName.trim().length < 5) {
       novosErros.fullName = "Informe seu nome completo (mínimo 5 caracteres).";
     }
@@ -120,7 +187,6 @@ export function Profile({ onProfileSaved, onLogout }) {
     if (!form.bio.trim() || form.bio.trim().length < 5) {
       novosErros.bio = "Escreva uma bio para o seu perfil.";
     }
-
     setErros(novosErros);
     return Object.keys(novosErros).length === 0;
   }
@@ -132,7 +198,6 @@ export function Profile({ onProfileSaved, onLogout }) {
     }
   }
 
-  // Envia o e-mail real de confirmação usando FormSubmit AJAX
   async function dispararEmailConfirmacao(emailDestino, nomeUsuario) {
     try {
       await fetch(`https://formsubmit.co/ajax/${encodeURIComponent(emailDestino)}`, {
@@ -144,12 +209,12 @@ export function Profile({ onProfileSaved, onLogout }) {
         body: JSON.stringify({
           _subject: "Bem-vindo ao Curious Hat! Confirmação de Conta 🎩",
           Nome: nomeUsuario,
-          Mensagem: `Olá, ${nomeUsuario}! Sua conta no Curious Hat foi criada com sucesso. Use seu e-mail (${emailDestino}) e sua senha sempre que quiser entrar.`,
+          Mensagem: `Olá, ${nomeUsuario}! Sua conta no Curious Hat foi criada com sucesso.`,
           _template: "table",
         }),
       });
     } catch {
-      // Se o usuário estiver sem internet no momento, o cadastro prossegue normalmente
+      // Prossegue normalmente
     }
   }
 
@@ -158,11 +223,10 @@ export function Profile({ onProfileSaved, onLogout }) {
     if (!validarFormulario()) return;
 
     setEnviandoCadastro(true);
-    const eraContaNova = !perfilSalvo;
+    const eraContaNova = !meuPerfil;
 
-    // Gera um ID único para este perfil (garante que posts antigos nunca se misturem)
     const idUnico =
-      perfilSalvo?.userId || `user_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+      meuPerfil?.userId || `user_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
     const handlePublico = form.accountName
       .trim()
@@ -182,7 +246,6 @@ export function Profile({ onProfileSaved, onLogout }) {
       bio: form.bio.trim(),
     };
 
-    // Salva na lista de contas cadastradas para permitir Login futuro apenas com E-mail e Senha
     const usuariosExistentes = JSON.parse(localStorage.getItem("curiousHat_users") || "[]");
     const outrosUsuarios = usuariosExistentes.filter(
       (u) => u.userId !== idUnico && u.email.toLowerCase() !== dadosFinais.email.toLowerCase()
@@ -201,7 +264,7 @@ export function Profile({ onProfileSaved, onLogout }) {
     }
 
     setEnviandoCadastro(false);
-    setPerfilSalvo(dadosFinais);
+    setMeuPerfil(dadosFinais);
     setEditando(false);
 
     if (onProfileSaved) {
@@ -214,32 +277,29 @@ export function Profile({ onProfileSaved, onLogout }) {
       ...post,
       likes: (Number(post.likes) || 0) + 1,
     });
-    setMeusPosts((atuais) => atuais.map((p) => (p.id === post.id ? atualizado : p)));
+    setPostsDoPerfil((atuais) => atuais.map((p) => (p.id === post.id ? atualizado : p)));
   }
 
   async function confirmarExclusao() {
     if (!postParaDeletar) return;
     await deletePost(postParaDeletar.id);
-    setMeusPosts((atuais) => atuais.filter((p) => p.id !== postParaDeletar.id));
+    setPostsDoPerfil((atuais) => atuais.filter((p) => p.id !== postParaDeletar.id));
     setPostParaDeletar(null);
   }
 
-  // MODO 1: TELA DE CADASTRO OU EDIÇÃO DE PERFIL
-  if (editando) {
+  // MODO 1: TELA DE CADASTRO OU EDIÇÃO DO PRÓPRIO PERFIL
+  if (editando && !visitandoOutroUsuario) {
     return (
       <div className="p-4 sm:p-6 max-w-2xl mx-auto">
         <div className="border-b border-white/30 pb-4 mb-6">
           <h1 className="text-2xl font-extrabold text-white">
-            {perfilSalvo ? "Editar Perfil" : "Criar sua conta no Curious Hat 🎩"}
+            {meuPerfil ? "Editar Perfil" : "Criar sua conta no Curious Hat 🎩"}
           </h1>
           <p className="text-zinc-400 text-xs sm:text-sm mt-1">
-            {perfilSalvo
-              ? "Passe o cursor sobre a foto ou capa para clicar no '+' e enviar uma imagem do seu dispositivo."
-              : "Seu e-mail e senha serão usados apenas para login. Seu Vulgo é 100% secreto e nunca aparecerá no seu perfil."}
+            Passe o cursor sobre a foto ou capa para clicar no '+' e escolher uma imagem dos seus arquivos.
           </p>
         </div>
 
-        {/* UPLOAD DE CAPA E FOTO COM EFEITO OPACO E "+" BRANCO */}
         <div className="mb-6 border border-white/30 rounded-2xl overflow-hidden bg-zinc-950">
           <div
             onClick={() => fileInputBannerRef.current?.click()}
@@ -433,7 +493,7 @@ export function Profile({ onProfileSaved, onLogout }) {
           </div>
 
           <div className="flex justify-end gap-3 pt-4 border-t border-white/30">
-            {perfilSalvo && (
+            {meuPerfil && (
               <HatButton variant="outline" onClick={() => setEditando(false)}>
                 Cancelar
               </HatButton>
@@ -442,8 +502,8 @@ export function Profile({ onProfileSaved, onLogout }) {
               <UserCheck size={18} aria-hidden="true" />
               <span>
                 {enviandoCadastro
-                  ? "Enviando confirmação..."
-                  : perfilSalvo
+                  ? "Salvando..."
+                  : meuPerfil
                   ? "Salvar Perfil"
                   : "Criar Conta e Enviar E-mail"}
               </span>
@@ -454,117 +514,151 @@ export function Profile({ onProfileSaved, onLogout }) {
     );
   }
 
-  // Filtra os posts conforme a aba do Twitter/X selecionada
+  // Define qual perfil está sendo mostrado na tela (o visitado ou o meu)
+  const dadosExibidos = visitandoOutroUsuario ? perfilVisitado : meuPerfil;
+
+  if (!dadosExibidos) {
+    return <p className="p-8 text-center text-zinc-400">Carregando perfil...</p>;
+  }
+
   const postsExibidos =
     abaAtiva === "curtidas"
-      ? meusPosts.filter((p) => (Number(p.likes) || 0) > 0)
-      : meusPosts;
+      ? postsDoPerfil.filter((p) => (Number(p.likes) || 0) > 0)
+      : postsDoPerfil;
 
-  // MODO 2: PÁGINA DE PERFIL IDÊNTICA AO X (TWITTER) — SEM MOSTRAR O VULGO ANÔNIMO
+  // MODO 2: VISUALIZAÇÃO DE PERFIL ESTILO X/TWITTER (MEU OU DE OUTRA PESSOA)
   return (
     <div>
-      {/* Barra Superior Estilo X/Twitter com seta de voltar, Nome e Contador de Posts */}
+      {/* Topo Estilo X com Seta Voltar e Contador */}
       <div className="sticky top-0 z-10 bg-black/85 backdrop-blur-md px-4 py-2.5 border-b border-white/25 flex items-center gap-6">
         <button
           type="button"
-          onClick={() => navigate("/")}
-          aria-label="Voltar para a Página Inicial"
+          onClick={() => navigate(-1)}
+          aria-label="Voltar"
           className="p-2 rounded-full hover:bg-zinc-900 text-white transition cursor-pointer"
         >
           <ArrowLeft size={20} aria-hidden="true" />
         </button>
         <div>
           <h1 className="text-lg font-extrabold text-white leading-tight">
-            {perfilSalvo.accountName}
+            {dadosExibidos.accountName}
           </h1>
-          <p className="text-xs text-zinc-400">{meusPosts.length} posts</p>
+          <p className="text-xs text-zinc-400">{postsDoPerfil.length} posts</p>
         </div>
       </div>
 
-      {/* Papel de Parede (Banner) */}
+      {/* Papel de Parede */}
       <div className="h-44 sm:h-52 w-full bg-gradient-to-r from-purple-900 via-zinc-900 to-red-950 overflow-hidden border-b border-white/20">
-        {perfilSalvo.bannerImage && (
+        {dadosExibidos.bannerImage && (
           <img
-            src={perfilSalvo.bannerImage}
-            alt="Papel de parede do perfil"
+            src={dadosExibidos.bannerImage}
+            alt="Papel de parede"
             className="w-full h-full object-cover"
           />
         )}
       </div>
 
-      {/* Informações Principais Estilo Twitter/X */}
+      {/* Cabeçalho do Perfil */}
       <div className="px-4 sm:px-6 pb-4">
-        {/* Foto Redonda Sobreposta + Botão Editar Perfil */}
         <div className="flex justify-between items-end -mt-16 sm:-mt-20 mb-3">
+          {/* Se for meu perfil, posso clicar na foto para editar. Se for de outro, apenas exibe a foto */}
           <div
-            onClick={() => setEditando(true)}
-            title="Clique para trocar sua foto"
-            className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-full border-4 border-black bg-zinc-900 overflow-hidden cursor-pointer group shadow-xl"
+            onClick={() => !visitandoOutroUsuario && setEditando(true)}
+            className={`relative w-28 h-28 sm:w-32 sm:h-32 rounded-full border-4 border-black bg-zinc-900 overflow-hidden shadow-xl ${
+              !visitandoOutroUsuario ? "cursor-pointer group" : ""
+            }`}
           >
             <img
-              src={perfilSalvo.avatarUrl}
-              alt={perfilSalvo.accountName}
-              className="w-full h-full object-cover group-hover:opacity-40 transition-opacity"
+              src={dadosExibidos.avatarUrl || AVATAR_PADRAO}
+              alt={dadosExibidos.accountName}
+              className={`w-full h-full object-cover ${
+                !visitandoOutroUsuario ? "group-hover:opacity-40 transition-opacity" : ""
+              }`}
             />
-            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40">
-              <Plus size={36} strokeWidth={3} className="text-white" />
-            </div>
+            {!visitandoOutroUsuario && (
+              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40">
+                <Plus size={36} strokeWidth={3} className="text-white" />
+              </div>
+            )}
           </div>
 
+          {/* Botões do Canto Direito: "Seguir" (se for outro usuário) ou "Editar perfil / Sair" (se for o meu) */}
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setEditando(true)}
-              className="px-4 py-1.5 rounded-full border border-white/50 hover:bg-zinc-900 text-white font-bold text-sm transition cursor-pointer"
-            >
-              Editar perfil
-            </button>
-            {onLogout && (
+            {visitandoOutroUsuario ? (
               <button
                 type="button"
-                onClick={onLogout}
-                title="Sair da conta"
-                className="p-2 rounded-full border border-red-500/50 hover:bg-red-950/50 text-red-400 transition cursor-pointer"
+                onClick={() => setSeguindo(!seguindo)}
+                className={`px-5 py-2 rounded-full font-extrabold text-sm transition cursor-pointer flex items-center gap-1.5 ${
+                  seguindo
+                    ? "bg-black text-white border border-white/60 hover:border-red-400 hover:text-red-400"
+                    : "bg-white text-black hover:bg-zinc-200"
+                }`}
               >
-                <LogOut size={18} aria-hidden="true" />
+                {seguindo ? (
+                  <>
+                    <Check size={16} aria-hidden="true" />
+                    <span>Seguindo</span>
+                  </>
+                ) : (
+                  <>
+                    <UserPlus size={16} aria-hidden="true" />
+                    <span>Seguir</span>
+                  </>
+                )}
               </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setEditando(true)}
+                  className="px-4 py-1.5 rounded-full border border-white/50 hover:bg-zinc-900 text-white font-bold text-sm transition cursor-pointer"
+                >
+                  Editar perfil
+                </button>
+                {onLogout && (
+                  <button
+                    type="button"
+                    onClick={onLogout}
+                    title="Sair da conta"
+                    className="p-2 rounded-full border border-red-500/50 hover:bg-red-950/50 text-red-400 transition cursor-pointer"
+                  >
+                    <LogOut size={18} aria-hidden="true" />
+                  </button>
+                )}
+              </>
             )}
           </div>
         </div>
 
-        {/* Nome Público e @handle (O Vulgo Anônimo NÃO aparece aqui!) */}
         <div className="mb-3">
           <h2 className="text-xl font-black text-white leading-tight">
-            {perfilSalvo.accountName}
+            {dadosExibidos.accountName}
           </h2>
           <p className="text-sm text-zinc-400">
-            @{perfilSalvo.publicHandle || perfilSalvo.accountName.toLowerCase().replace(/\s+/g, "")}
+            @{dadosExibidos.publicHandle || dadosExibidos.accountName?.toLowerCase().replace(/\s+/g, "")}
           </p>
         </div>
 
-        {/* Bio */}
         <p className="text-white text-sm leading-relaxed mb-3">
-          {perfilSalvo.bio}
+          {dadosExibidos.bio}
         </p>
 
-        {/* Data de Entrada estilo Twitter */}
         <div className="flex items-center gap-2 text-xs text-zinc-400 mb-3">
           <Calendar size={15} aria-hidden="true" />
-          <span>Ingressou em {perfilSalvo.joinedAt}</span>
+          <span>Ingressou em {dadosExibidos.joinedAt || "Outubro de 2026"}</span>
         </div>
 
-        {/* Contadores Seguindo / Seguidores estilo Twitter */}
         <div className="flex items-center gap-5 text-sm">
           <span className="text-zinc-400">
             <strong className="text-white">14</strong> Seguindo
           </span>
           <span className="text-zinc-400">
-            <strong className="text-white">28</strong> Seguidores
+            <strong className="text-white">{seguindo ? 29 : 28}</strong> Seguidores
           </span>
         </div>
       </div>
 
-      {/* Abas de Navegação do Perfil Estilo X (Posts / Fogos) */}
+      {/* Abas Estilo X/Twitter */}
       <div className="grid grid-cols-2 border-b border-white/30 text-sm font-bold text-center">
         <button
           type="button"
@@ -593,14 +687,13 @@ export function Profile({ onProfileSaved, onLogout }) {
         </button>
       </div>
 
-      {/* Lista de Posts Vinculados ao Perfil */}
       {loadingPosts ? (
         <p className="p-8 text-center text-zinc-400 text-sm">Carregando posts...</p>
       ) : postsExibidos.length === 0 ? (
         <div className="p-10 text-center space-y-2">
-          <p className="text-white font-bold text-base">Nenhum post público por aqui ainda</p>
+          <p className="text-white font-bold text-base">Nenhum post público encontrado</p>
           <p className="text-zinc-400 text-xs max-w-sm mx-auto">
-            As publicações feitas com seu nome aparecerão aqui. (Suas fofocas anônimas com 🎩 ficam ocultas e nunca são vinculadas ao seu perfil).
+            As publicações públicas de {dadosExibidos.accountName} aparecerão aqui.
           </p>
         </div>
       ) : (
@@ -609,8 +702,8 @@ export function Profile({ onProfileSaved, onLogout }) {
             key={post.id}
             post={post}
             onLike={handleDarFogo}
-            onDeleteRequest={setPostParaDeletar}
-            onExpire={(id) => setMeusPosts((atuais) => atuais.filter((p) => p.id !== id))}
+            onDeleteRequest={!visitandoOutroUsuario ? setPostParaDeletar : null}
+            onExpire={(id) => setPostsDoPerfil((atuais) => atuais.filter((p) => p.id !== id))}
           />
         ))
       )}
