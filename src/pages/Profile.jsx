@@ -10,7 +10,7 @@ import {
   UserPlus,
   Check,
 } from "lucide-react";
-import { getPosts, updatePost, deletePost } from "../services/api";
+import { getPosts, togglePostLike, deletePost } from "../services/api";
 import { GossipCard } from "../components/GossipCard";
 import { HatButton } from "../components/HatButton";
 import { ConfirmModal } from "../components/ConfirmModal";
@@ -273,12 +273,9 @@ export function Profile({ onProfileSaved, onLogout }) {
   }
 
   async function handleDarFogo(post) {
-    const atualizado = await updatePost(post.id, {
-      ...post,
-      likes: (Number(post.likes) || 0) + 1,
-    });
-    setPostsDoPerfil((atuais) => atuais.map((p) => (p.id === post.id ? atualizado : p)));
-  }
+  const atualizado = await togglePostLike(post);
+  setPostsDoPerfil((atuais) => atuais.map((p) => (p.id === post.id ? atualizado : p)));
+}
 
   async function confirmarExclusao() {
     if (!postParaDeletar) return;

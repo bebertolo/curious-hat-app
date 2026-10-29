@@ -1,7 +1,7 @@
 // src/pages/Feed.jsx
 import { useState, useEffect } from "react";
 import { RefreshCw, Send, Clock } from "lucide-react";
-import { getPosts, createPost, updatePost, deletePost } from "../services/api";
+import { getPosts, createPost, togglePostLike, deletePost } from "../services/api";
 import { GossipCard } from "../components/GossipCard";
 import { ConfirmModal } from "../components/ConfirmModal";
 import { HatButton } from "../components/HatButton";
@@ -91,18 +91,15 @@ export function Feed() {
   }
 
   async function handleDarFogo(post) {
-    try {
-      const atualizado = await updatePost(post.id, {
-        ...post,
-        likes: (Number(post.likes) || 0) + 1,
-      });
-      setPosts((listaAtual) =>
-        listaAtual.map((item) => (item.id === post.id ? atualizado : item))
-      );
-    } catch {
-      setError("Não foi possível curtir agora.");
-    }
+  try {
+    const atualizado = await togglePostLike(post);
+    setPosts((listaAtual) =>
+      listaAtual.map((item) => (item.id === post.id ? atualizado : item))
+    );
+  } catch {
+    setError("Não foi possível curtir agora.");
   }
+}
 
   async function confirmarExclusao() {
     if (!postParaDeletar) return;

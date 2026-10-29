@@ -1,7 +1,7 @@
 // src/pages/SearchPage.jsx
 import { useState, useEffect } from "react";
 import { Search as SearchIcon } from "lucide-react";
-import { getPosts, updatePost, deletePost } from "../services/api";
+import { getPosts, togglePostLike, deletePost } from "../services/api";
 import { GossipCard } from "../components/GossipCard";
 import { ConfirmModal } from "../components/ConfirmModal";
 
@@ -32,17 +32,14 @@ export function SearchPage() {
     carregar();
   }, []);
 
-  async function handleDarFogo(post) {
-    try {
-      const atualizado = await updatePost(post.id, {
-        ...post,
-        likes: (Number(post.likes) || 0) + 1,
-      });
-      setPosts((atuais) => atuais.map((p) => (p.id === post.id ? atualizado : p)));
-    } catch {
-      setError("Erro ao dar fogo.");
-    }
+ async function handleDarFogo(post) {
+  try {
+    const atualizado = await togglePostLike(post);
+    setPosts((atuais) => atuais.map((p) => (p.id === post.id ? atualizado : p)));
+  } catch {
+    setError("Erro ao dar fogo.");
   }
+}
 
   async function confirmarExclusao() {
     if (!postParaDeletar) return;

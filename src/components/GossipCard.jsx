@@ -2,9 +2,11 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Flame, Trash2, Clock, MessageSquare } from "lucide-react";
+import { hasUserLiked } from "../services/api";
 
 export function GossipCard({ post, onLike, onDeleteRequest, onExpire, showDetailsLink = true }) {
   const [tempoRestante, setTempoRestante] = useState("");
+  const jaCurtiu = hasUserLiked(post);
 
   useEffect(() => {
     function calcularTempo() {
@@ -38,13 +40,11 @@ export function GossipCard({ post, onLike, onDeleteRequest, onExpire, showDetail
     return () => clearInterval(intervalo);
   }, [post.expiresAt, post.id, onExpire]);
 
-  // Define o identificador do perfil (usa o authorId ou o nome caso seja um post antigo)
   const perfilDestino = post.authorId || encodeURIComponent(post.codename);
 
   return (
     <article className="border-b border-white/30 p-4 sm:p-5 bg-black hover:bg-zinc-950 transition-colors">
       <div className="flex items-start gap-3">
-        {/* Se for Anônimo: mostra o Chapéu sem link. Se for Público: Foto clicável que leva ao Perfil */}
         {post.isAnonymous ? (
           <div
             className="w-10 h-10 rounded-full bg-purple-950 border border-purple-400 flex items-center justify-center text-lg shrink-0 select-none"
@@ -117,9 +117,19 @@ export function GossipCard({ post, onLike, onDeleteRequest, onExpire, showDetail
             <button
               type="button"
               onClick={() => onLike(post)}
-              className="flex items-center gap-1.5 text-purple-400 hover:text-purple-300 font-bold cursor-pointer py-1 px-2 rounded hover:bg-purple-950/40 transition"
+              aria-pressed={jaCurtiu}
+              title={jaCurtiu ? "Você já deu Fogo (clique para remover)" : "Dar Fogo (1 por perfil)"}
+              className={`flex items-center gap-1.5 font-bold cursor-pointer py-1 px-2.5 rounded-full transition ${
+                jaCurtiu
+                  ? "bg-purple-950/80 text-purple-300 border border-purple-400"
+                  : "text-purple-400 hover:text-purple-300 hover:bg-purple-950/40 border border-transparent"
+              }`}
             >
-              <Flame size={17} aria-hidden="true" />
+              <Flame
+                size={17}
+                aria-hidden="true"
+                className={jaCurtiu ? "fill-purple-400 text-purple-300" : ""}
+              />
               <span>{post.likes || 0} Fogos</span>
             </button>
 
