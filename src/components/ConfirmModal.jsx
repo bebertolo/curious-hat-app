@@ -1,4 +1,4 @@
-// src/components/ConfirmModal.jsx
+
 import { HatButton } from "./HatButton";
 
 export function ConfirmModal({ post, onCancel, onConfirm, isDeleting }) {
