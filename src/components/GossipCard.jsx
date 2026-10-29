@@ -1,29 +1,29 @@
-// src/components/GossipCard.jsx
+
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Flame, Trash2, Clock, MessageSquare } from "lucide-react";
 import { hasUserLiked } from "../services/api";
-
 export function GossipCard({ post, onLike, onDeleteRequest, onExpire, showDetailsLink = true }) {
   const [tempoRestante, setTempoRestante] = useState("");
-  const jaCurtiu = hasUserLiked(post);
+  const [jaCurtiu, setJaCurtiu] = useState(() => hasUserLiked(post));
+  const [processandoLike, setProcessandoLike] = useState(false);
 
+  useEffect(() => {
+    setJaCurtiu(hasUserLiked(post));
+  }, [post]);
   useEffect(() => {
     function calcularTempo() {
       const diferenca = Number(post.expiresAt) - Date.now();
       const cinquentaAnosEmMs = 50 * 365 * 24 * 60 * 60 * 1000;
-
       if (diferenca > cinquentaAnosEmMs) {
         setTempoRestante("💬 Comentário Fixo");
         return;
       }
-
       if (diferenca <= 0) {
         setTempoRestante("Expirado!");
         if (onExpire) onExpire(post.id);
         return;
       }
-
       const horas = Math.floor(diferenca / (1000 * 60 * 60));
       const minutos = Math.floor((diferenca % (1000 * 60 * 60)) / (1000 * 60));
       const segundos = Math.floor((diferenca % (1000 * 60)) / 1000);
@@ -34,14 +34,28 @@ export function GossipCard({ post, onLike, onDeleteRequest, onExpire, showDetail
         setTempoRestante(`${minutos}m ${segundos < 10 ? "0" : ""}${segundos}s`);
       }
     }
-
     calcularTempo();
     const intervalo = setInterval(calcularTempo, 1000);
     return () => clearInterval(intervalo);
   }, [post.expiresAt, post.id, onExpire]);
 
+  // Se não curtiu -> soma 1 Fogo. Se já curtiu -> retira o Fogo!
+  async function handleCliqueFogo() {
+    if (processandoLike) return;
+    const estavaCurtido = hasUserLiked(post);
+    try {
+      setProcessandoLike(true);
+      setJaCurtiu(!estavaCurtido);
+      await onLike({
+        ...post,
+        _toggleLikeAction: estavaCurtido ? "unlike" : "like",
+        _originalLikes: Number(post.likes) || 0,
+      });
+    } finally {
+      setProcessandoLike(false);
+    }
+  }
   const perfilDestino = post.authorId || encodeURIComponent(post.codename);
-
   return (
     <article className="border-b border-white/30 p-4 sm:p-5 bg-black hover:bg-zinc-950 transition-colors">
       <div className="flex items-start gap-3">
@@ -68,7 +82,6 @@ export function GossipCard({ post, onLike, onDeleteRequest, onExpire, showDetail
             />
           </Link>
         )}
-
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
             <div className="flex items-center gap-2">
@@ -107,21 +120,20 @@ export function GossipCard({ post, onLike, onDeleteRequest, onExpire, showDetail
               <span>{tempoRestante}</span>
             </div>
           </div>
-
           {post.title && <h2 className="text-base font-bold text-white mb-1">{post.title}</h2>}
           <p className="text-zinc-100 whitespace-pre-wrap leading-relaxed mb-3 text-sm sm:text-base">
             {post.content}
           </p>
-
           <div className="flex items-center justify-between pt-2 border-t border-white/15 text-xs sm:text-sm">
             <button
               type="button"
-              onClick={() => onLike(post)}
+              onClick={handleCliqueFogo}
+              disabled={processandoLike}
               aria-pressed={jaCurtiu}
-              title={jaCurtiu ? "Você já deu Fogo (clique para remover)" : "Dar Fogo (1 por perfil)"}
-              className={`flex items-center gap-1.5 font-bold cursor-pointer py-1 px-2.5 rounded-full transition ${
+              title={jaCurtiu ? "Clique para remover seu Fogo" : "Dar Fogo"}
+              className={`flex items-center gap-1.5 font-bold py-1 px-3 rounded-full transition cursor-pointer ${
                 jaCurtiu
-                  ? "bg-purple-950/80 text-purple-300 border border-purple-400"
+                  ? "bg-purple-950/90 text-purple-300 border border-purple-400 hover:bg-red-950/60 hover:border-red-400 hover:text-red-300"
                   : "text-purple-400 hover:text-purple-300 hover:bg-purple-950/40 border border-transparent"
               }`}
             >
@@ -132,7 +144,6 @@ export function GossipCard({ post, onLike, onDeleteRequest, onExpire, showDetail
               />
               <span>{post.likes || 0} Fogos</span>
             </button>
-
             {showDetailsLink && (
               <Link
                 to={`/fofoca/${post.id}`}
@@ -144,7 +155,6 @@ export function GossipCard({ post, onLike, onDeleteRequest, onExpire, showDetail
                 </span>
               </Link>
             )}
-
             {onDeleteRequest && (
               <button
                 type="button"

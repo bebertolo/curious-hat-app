@@ -3,26 +3,21 @@ import { useState } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { UserPlus, LogIn, ArrowLeft, Lock, Mail, CheckCircle2 } from "lucide-react";
 import { Navbar } from "./components/Navbar";
+import { RankingSidebar } from "./components/RankingSideBar";
 import { Feed } from "./pages/Feed";
 import { SearchPage } from "./pages/SearchPage";
 import { GossipDetail } from "./pages/GossipDetail";
 import { Profile } from "./pages/Profile";
-
 export default function App() {
   const [perfilAtivo, setPerfilAtivo] = useState(() => {
     const dados = localStorage.getItem("curiousHat_profile");
     return dados ? JSON.parse(dados) : null;
   });
-
-  // Controla qual tela inicial exibir: "boasVindas" | "login" | "cadastro"
   const [modoEntrada, setModoEntrada] = useState("boasVindas");
-
-  // Estados exclusivos do Login (apenas E-mail e Senha)
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [erroLogin, setErroLogin] = useState("");
   const [avisoEmailEnviado, setAvisoEmailEnviado] = useState("");
-
   function handleLogout() {
     localStorage.removeItem("curiousHat_profile");
     setPerfilAtivo(null);
@@ -31,7 +26,6 @@ export default function App() {
     setLoginPassword("");
     setErroLogin("");
   }
-
   function handleLoginSubmit(e) {
     e.preventDefault();
     setErroLogin("");
@@ -42,19 +36,15 @@ export default function App() {
         u.email.toLowerCase() === loginEmail.trim().toLowerCase() &&
         u.password === loginPassword
     );
-
     if (!usuarioEncontrado) {
       setErroLogin("E-mail ou senha incorretos. Verifique seus dados ou crie um perfil.");
       return;
     }
-
     localStorage.setItem("curiousHat_profile", JSON.stringify(usuarioEncontrado));
     setPerfilAtivo(usuarioEncontrado);
   }
-
   return (
     <BrowserRouter>
-      {/* 1. TELA DE ABERTURA (CHAPÉU NA ESQUERDA + BOTÕES CRIAR PERFIL / ENTRAR NA DIREITA) */}
       {!perfilAtivo && modoEntrada === "boasVindas" ? (
         <div className="min-h-screen bg-black text-white flex flex-col md:flex-row items-center justify-center p-6 md:p-16 relative overflow-hidden">
           <div
@@ -65,9 +55,7 @@ export default function App() {
             className="absolute -bottom-32 -right-32 w-96 h-96 bg-red-800/15 rounded-full blur-3xl pointer-events-none"
             aria-hidden="true"
           />
-
           <div className="max-w-5xl w-full mx-auto grid grid-cols-1 md:grid-cols-2 gap-12 items-center z-10">
-            {/* LADO ESQUERDO: CHAPÉU ESTILIZADO + CURIOUS HAT */}
             <div className="flex flex-col items-center md:items-start text-center md:text-left select-none">
               <div className="relative group mb-6">
                 <div
@@ -132,7 +120,6 @@ export default function App() {
               </p>
             </div>
 
-            {/* LADO DIREITO: CRIAR PERFIL OU ENTRAR COM E-MAIL E SENHA */}
             <div className="flex flex-col items-center md:items-end justify-center">
               <div className="w-full max-w-sm p-8 rounded-3xl border border-white/25 bg-zinc-950/90 shadow-2xl text-center space-y-6">
                 <div className="space-y-2">
@@ -172,7 +159,6 @@ export default function App() {
           </div>
         </div>
       ) : !perfilAtivo && modoEntrada === "login" ? (
-        /* 2. TELA DE LOGIN (APENAS E-MAIL E SENHA) */
         <div className="min-h-screen bg-black text-white flex flex-col justify-center py-8 px-4">
           <div className="max-w-md w-full mx-auto mb-4">
             <button
@@ -247,7 +233,6 @@ export default function App() {
           </div>
         </div>
       ) : !perfilAtivo && modoEntrada === "cadastro" ? (
-        /* 3. TELA DE CADASTRO DE PERFIL */
         <div className="min-h-screen bg-black text-white flex flex-col justify-center py-8 px-4">
           <div className="max-w-2xl w-full mx-auto mb-3">
             <button
@@ -269,11 +254,10 @@ export default function App() {
           </div>
         </div>
       ) : (
-        /* 4. SITE LIBERADO */
-        <div className="min-h-screen bg-black text-white flex flex-col md:flex-row max-w-5xl mx-auto border-x border-white/40">
+        <div className="min-h-screen bg-black text-white flex flex-col md:flex-row max-w-7xl w-full mx-auto border-x border-white/30">
+          {/* 1. Esquerda: Menu Lateral */}
           <Navbar />
-
-          <main className="flex-1 min-h-screen bg-black">
+          <main className="flex-1 min-w-0 min-h-screen bg-black">
             {avisoEmailEnviado && (
               <div
                 role="status"
@@ -292,7 +276,6 @@ export default function App() {
                 </button>
               </div>
             )}
-
             <Routes>
               <Route path="/" element={<Feed />} />
               <Route path="/buscar" element={<SearchPage />} />
@@ -317,6 +300,7 @@ export default function App() {
               />
             </Routes>
           </main>
+          <RankingSidebar />
         </div>
       )}
     </BrowserRouter>
